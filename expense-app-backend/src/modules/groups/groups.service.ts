@@ -121,13 +121,25 @@ export class GroupsService {
       throw new Error('Only admins can add members');
     }
 
-    // Check if user exists
+    // Check if user exists, or create a guest user
     let targetUser = await prisma.user.findUnique({
       where: { email }
     });
 
     const isGuest = !targetUser;
-    const targetUserId = targetUser?.id || userId; // Use temporary ID for guest
+
+    if (!targetUser) {
+      // Create a guest user placeholder
+      targetUser = await prisma.user.create({
+        data: {
+          email,
+          name: email.split('@')[0],
+          isGuest: true,
+        }
+      });
+    }
+
+    const targetUserId = targetUser.id;
 
     // Check if already a member
     const existingMember = await prisma.groupMember.findUnique({

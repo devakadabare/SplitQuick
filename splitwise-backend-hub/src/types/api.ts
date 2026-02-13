@@ -24,13 +24,17 @@ export interface Group {
 }
 
 export interface GroupMember {
-  id: string;
   userId: string;
   groupId: string;
   role: 'admin' | 'member';
-  userName: string;
-  userEmail: string;
   joinedAt: string;
+  isGuest: boolean;
+  guestEmail: string | null;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
 export interface Expense {

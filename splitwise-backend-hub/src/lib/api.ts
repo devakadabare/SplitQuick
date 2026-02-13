@@ -115,11 +115,48 @@ class ApiClient {
   }
 
   async getGroupExpenses(groupId: string, limit = 50, offset = 0): Promise<Expense[]> {
-    return this.request(`/api/expenses/group/${groupId}?limit=${limit}&offset=${offset}`);
+    const raw: any[] = await this.request(`/api/expenses/group/${groupId}?limit=${limit}&offset=${offset}`);
+    return raw.map((e) => ({
+      ...e,
+      amount: Number(e.amount),
+      paidByName: e.payer?.name || 'Unknown',
+      splits: e.splits?.map((s: any) => ({
+        ...s,
+        amount: Number(s.amount),
+        percentage: s.percentage != null ? Number(s.percentage) : undefined,
+        userName: s.user?.name,
+      })) || [],
+    }));
   }
 
   async getExpense(expenseId: string): Promise<Expense> {
-    return this.request(`/api/expenses/${expenseId}`);
+    const e: any = await this.request(`/api/expenses/${expenseId}`);
+    return {
+      ...e,
+      amount: Number(e.amount),
+      paidByName: e.payer?.name || 'Unknown',
+      splits: e.splits?.map((s: any) => ({
+        ...s,
+        amount: Number(s.amount),
+        percentage: s.percentage != null ? Number(s.percentage) : undefined,
+        userName: s.user?.name,
+      })) || [],
+    };
+  }
+
+  async updateExpense(expenseId: string, data: { title?: string; amount?: number; category?: string; note?: string; date?: string }): Promise<Expense> {
+    const e: any = await this.request(`/api/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(data) });
+    return {
+      ...e,
+      amount: Number(e.amount),
+      paidByName: e.payer?.name || 'Unknown',
+      splits: e.splits?.map((s: any) => ({
+        ...s,
+        amount: Number(s.amount),
+        percentage: s.percentage != null ? Number(s.percentage) : undefined,
+        userName: s.user?.name,
+      })) || [],
+    };
   }
 
   async deleteExpense(expenseId: string): Promise<{ message: string }> {
@@ -127,12 +164,24 @@ class ApiClient {
   }
 
   async getGroupBalances(groupId: string): Promise<Balance[]> {
-    return this.request(`/api/expenses/group/${groupId}/balances`);
+    const res: any = await this.request(`/api/expenses/group/${groupId}/balances`);
+    return (res.balances || []).map((b: any) => ({
+      userId: b.userId,
+      userName: b.name,
+      balance: Number(b.balance),
+    }));
   }
 
   // Settlements
   async getSimplifiedSettlements(groupId: string): Promise<SimplifiedSettlement[]> {
-    return this.request(`/api/settlements/group/${groupId}/simplified`);
+    const res: any = await this.request(`/api/settlements/group/${groupId}/simplified`);
+    return (res.simplifiedSettlements || []).map((s: any) => ({
+      from: s.from,
+      fromName: s.fromName || s.from,
+      to: s.to,
+      toName: s.toName || s.to,
+      amount: Number(s.amount),
+    }));
   }
 
   async recordSettlement(data: RecordSettlementRequest): Promise<Settlement> {
@@ -140,7 +189,13 @@ class ApiClient {
   }
 
   async getGroupSettlements(groupId: string): Promise<Settlement[]> {
-    return this.request(`/api/settlements/group/${groupId}`);
+    const raw: any[] = await this.request(`/api/settlements/group/${groupId}`);
+    return raw.map((s) => ({
+      ...s,
+      amount: Number(s.amount),
+      fromUserName: s.fromUser?.name,
+      toUserName: s.toUser?.name,
+    }));
   }
 
   async confirmSettlement(settlementId: string): Promise<Settlement> {

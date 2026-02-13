@@ -8,19 +8,24 @@ export class AuthService {
       where: { email }
     });
 
-    if (existingUser) {
+    if (existingUser && !existingUser.isGuest) {
       throw new Error('User already exists');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        passwordHash
-      }
-    });
+    let user;
+    if (existingUser && existingUser.isGuest) {
+      // Upgrade guest to full user
+      user = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { name, passwordHash, isGuest: false }
+      });
+    } else {
+      user = await prisma.user.create({
+        data: { name, email, passwordHash }
+      });
+    }
 
     const token = generateToken(user.id, user.email);
 
@@ -39,7 +44,7 @@ export class AuthService {
       where: { email }
     });
 
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw new Error('Invalid credentials');
     }
 

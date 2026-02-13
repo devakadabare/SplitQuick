@@ -87,7 +87,13 @@ export class ExpensesService {
             email: true
           }
         },
-        splits: true
+        splits: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            }
+          }
+        }
       }
     });
 
@@ -122,7 +128,13 @@ export class ExpensesService {
             email: true
           }
         },
-        splits: true
+        splits: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            }
+          }
+        }
       },
       orderBy: {
         date: 'desc'
@@ -145,7 +157,13 @@ export class ExpensesService {
             email: true
           }
         },
-        splits: true,
+        splits: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            }
+          }
+        },
         group: {
           include: {
             members: true
@@ -188,7 +206,13 @@ export class ExpensesService {
             email: true
           }
         },
-        splits: true
+        splits: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            }
+          }
+        }
       }
     });
 
@@ -197,6 +221,15 @@ export class ExpensesService {
 
   async deleteExpense(expenseId: string, userId: string) {
     const expense = await this.getExpenseById(expenseId, userId);
+
+    // Only the expense creator or a group admin can delete
+    const isExpenseCreator = expense.paidBy === userId;
+    const membership = expense.group.members.find(m => m.userId === userId);
+    const isGroupAdmin = membership?.role === 'admin';
+
+    if (!isExpenseCreator && !isGroupAdmin) {
+      throw new Error('Only the expense creator or group admin can delete this expense');
+    }
 
     // Soft delete
     await prisma.expense.update({
