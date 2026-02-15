@@ -15,6 +15,7 @@ app.use(helmet());
 
 // Allow multiple frontend origins
 const allowedOrigins = [
+  'http://192.168.1.41:3000',
   'http://localhost:3000',  // Next.js frontend
   'http://localhost:5173',  // Vite frontend
   'http://localhost:5174',  // Alternative Vite port

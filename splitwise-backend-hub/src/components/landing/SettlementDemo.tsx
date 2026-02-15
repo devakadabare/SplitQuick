@@ -89,7 +89,7 @@ export default function SettlementDemo() {
               className="flex items-center gap-3 text-sm bg-primary/10 rounded-lg px-4 py-4 font-medium"
             >
               <span className="w-3 h-3 rounded-full bg-primary" />
-              Alice \u2192 Carol: $50
+              {'Alice \u2192 David: $50'}
             </motion.div>
             <p className="mt-6 text-sm font-semibold text-primary">Just 1 transaction</p>
           </motion.div>
