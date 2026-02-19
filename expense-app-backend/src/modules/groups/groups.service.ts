@@ -263,6 +263,41 @@ export class GroupsService {
       throw new Error('Only admins can delete groups');
     }
 
+    // Check for outstanding balances
+    const expenses = await prisma.expense.findMany({
+      where: { groupId, deletedAt: null },
+      include: { splits: true }
+    });
+
+    const settlements = await prisma.settlement.findMany({
+      where: { groupId, status: 'confirmed' }
+    });
+
+    const members = await prisma.groupMember.findMany({
+      where: { groupId }
+    });
+
+    const balances: Record<string, number> = {};
+    members.forEach(m => { balances[m.userId] = 0; });
+
+    expenses.forEach(expense => {
+      balances[expense.paidBy] += Number(expense.amount);
+      expense.splits.forEach(split => {
+        balances[split.userId] -= Number(split.amount);
+      });
+    });
+
+    settlements.forEach(settlement => {
+      balances[settlement.fromUserId] += Number(settlement.amount);
+      balances[settlement.toUserId] -= Number(settlement.amount);
+    });
+
+    const hasOutstandingBalances = Object.values(balances).some(b => Math.abs(b) > 0.01);
+
+    if (hasOutstandingBalances) {
+      throw new Error('Cannot delete group with outstanding balances. Please settle all debts first.');
+    }
+
     // Soft delete
     const group = await prisma.group.update({
       where: { id: groupId },

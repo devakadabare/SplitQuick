@@ -166,6 +166,21 @@ export default function Dashboard() {
                       <SelectItem value="GBP">GBP (£)</SelectItem>
                       <SelectItem value="LKR">LKR (Rs)</SelectItem>
                       <SelectItem value="INR">INR (₹)</SelectItem>
+                      <SelectItem value="AUD">AUD (A$)</SelectItem>
+                      <SelectItem value="CAD">CAD (C$)</SelectItem>
+                      <SelectItem value="JPY">JPY (¥)</SelectItem>
+                      <SelectItem value="CNY">CNY (¥)</SelectItem>
+                      <SelectItem value="CHF">CHF (Fr)</SelectItem>
+                      <SelectItem value="SGD">SGD (S$)</SelectItem>
+                      <SelectItem value="AED">AED (د.إ)</SelectItem>
+                      <SelectItem value="MYR">MYR (RM)</SelectItem>
+                      <SelectItem value="THB">THB (฿)</SelectItem>
+                      <SelectItem value="KRW">KRW (₩)</SelectItem>
+                      <SelectItem value="BRL">BRL (R$)</SelectItem>
+                      <SelectItem value="ZAR">ZAR (R)</SelectItem>
+                      <SelectItem value="SEK">SEK (kr)</SelectItem>
+                      <SelectItem value="NZD">NZD (NZ$)</SelectItem>
+                      <SelectItem value="PKR">PKR (₨)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -227,7 +242,7 @@ function GroupCard({ group, userId }: { group: any; userId: string }) {
     },
   });
 
-  const isAdmin = group.createdBy === userId;
+  const isAdmin = group.members?.some((m: any) => m.userId === userId && m.role === 'admin');
 
   return (
     <Card className="border-0 shadow-md hover:shadow-lg hover:shadow-primary/5 transition-all group/groupcard relative">
@@ -250,7 +265,7 @@ function GroupCard({ group, userId }: { group: any; userId: string }) {
                 variant="ghost"
                 size="icon"
                 className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover/groupcard:opacity-100 transition-opacity"
-                onClick={(e) => e.preventDefault()}
+                onClick={(e) => e.stopPropagation()}
               >
                 <Trash2 className="w-3.5 h-3.5 text-destructive" />
               </Button>

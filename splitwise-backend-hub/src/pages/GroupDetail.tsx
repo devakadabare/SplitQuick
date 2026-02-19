@@ -30,6 +30,9 @@ const CATEGORIES = ['Food', 'Transport', 'Accommodation', 'Utilities', 'Entertai
 
 const currencySymbol: Record<string, string> = {
   USD: '$', EUR: '€', GBP: '£', LKR: 'Rs', INR: '₹',
+  AUD: 'A$', CAD: 'C$', JPY: '¥', CNY: '¥', CHF: 'Fr',
+  SGD: 'S$', AED: 'د.إ', MYR: 'RM', THB: '฿', KRW: '₩',
+  BRL: 'R$', ZAR: 'R', SEK: 'kr', NZD: 'NZ$', PKR: '₨',
 };
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#ec4899', '#6366f1'];
