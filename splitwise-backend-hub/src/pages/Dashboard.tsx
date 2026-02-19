@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
-import { Plus, Users, Wallet, TrendingUp, TrendingDown, LogOut, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, Users, TrendingUp, TrendingDown, LogOut, ArrowRight, Trash2 } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -66,9 +66,7 @@ export default function Dashboard() {
       <header className="border-b border-border bg-card">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img src="/splitquick-logo.png" alt="SplitQuick" className="w-9 h-9 rounded-xl" />
             <h1 className="text-xl font-display font-bold text-foreground">SplitQuick</h1>
           </div>
           <div className="flex items-center gap-3">

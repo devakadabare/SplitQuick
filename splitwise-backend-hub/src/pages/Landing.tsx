@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import HeroSection from '@/components/landing/HeroSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
@@ -29,9 +28,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
-                <Wallet className="w-5 h-5 text-primary-foreground" />
-              </div>
+              <img src="/splitquick-logo.png" alt="SplitQuick" className="w-9 h-9 rounded-xl" />
               <span className="text-xl font-bold tracking-tight font-display">SplitQuick</span>
             </div>
             <div className="flex items-center gap-3">
