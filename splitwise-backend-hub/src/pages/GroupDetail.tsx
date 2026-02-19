@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -18,8 +18,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import {
   ArrowLeft, ArrowRight, Plus, UserPlus, Receipt, ArrowRightLeft, Users,
-  TrendingUp, TrendingDown, CheckCircle, Check, Clock, Trash2, Pencil, Calendar as CalendarIcon,
+  TrendingUp, TrendingDown, CheckCircle, Check, Clock, Trash2, Pencil, Calendar as CalendarIcon, MoreVertical,
 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -43,36 +44,84 @@ export default function GroupDetail() {
     queryKey: ['group', groupId],
     queryFn: () => api.getGroup(groupId!),
     enabled: !!groupId,
+    staleTime: 30_000,
   });
 
   const { data: expenses = [] } = useQuery({
     queryKey: ['expenses', groupId],
     queryFn: () => api.getGroupExpenses(groupId!),
     enabled: !!groupId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 
   const { data: balances = [] } = useQuery({
     queryKey: ['balances', groupId],
     queryFn: () => api.getGroupBalances(groupId!),
     enabled: !!groupId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 
   const { data: simplified = [] } = useQuery({
     queryKey: ['simplified', groupId],
     queryFn: () => api.getSimplifiedSettlements(groupId!),
     enabled: !!groupId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 
   const { data: settlements = [] } = useQuery({
     queryKey: ['settlements', groupId],
     queryFn: () => api.getGroupSettlements(groupId!),
     enabled: !!groupId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 
   const sym = currencySymbol[group?.currency || 'USD'] || '$';
 
   const [view, setView] = useState<'activity' | 'insights'>('activity');
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [settlePrefill, setSettlePrefill] = useState<{ from: string; to: string; amount: string }>({ from: '', to: '', amount: '' });
+
+  const currentUserRole = group?.members?.find((m: any) => m.userId === user?.id)?.role;
+  const isAdmin = currentUserRole === 'admin';
+
+  // Build per-user breakdown: for each user, show who they owe / who owes them
+  const userBreakdowns = useMemo(() => {
+    if (!simplified.length || !balances.length) return [];
+
+    return balances.map((b: any) => {
+      const owes: { userId: string; name: string; amount: number }[] = [];
+      const getsBack: { userId: string; name: string; amount: number }[] = [];
+
+      simplified.forEach((s: any) => {
+        if (s.from === b.userId) {
+          owes.push({ userId: s.to, name: s.toName, amount: s.amount });
+        }
+        if (s.to === b.userId) {
+          getsBack.push({ userId: s.from, name: s.fromName, amount: s.amount });
+        }
+      });
+
+      return { ...b, owes, getsBack };
+    }).filter((b: any) => b.owes.length > 0 || b.getsBack.length > 0);
+  }, [balances, simplified]);
+
+  const [deleteGroupOpen, setDeleteGroupOpen] = useState(false);
+  const deleteGroupMutation = useMutation({
+    mutationFn: () => api.deleteGroup(groupId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      toast.success('Group deleted successfully');
+      navigate('/dashboard');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete group');
+    },
+  });
 
   const totalExpenses = useMemo(() => expenses.reduce((sum, e: any) => sum + e.amount, 0), [expenses]);
 
@@ -123,7 +172,48 @@ export default function GroupDetail() {
                 {group.currency} · {group.members?.length || 0} members
               </p>
             </div>
+            {isAdmin && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="w-5 h-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteGroupOpen(true)}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Delete Group
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
+
+          {/* Delete Group Confirmation */}
+          <Dialog open={deleteGroupOpen} onOpenChange={setDeleteGroupOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-display">Delete Group</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to delete <strong>"{group.name}"</strong>? This will remove all expenses, settlements, and member data. This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end mt-4">
+                <Button variant="outline" onClick={() => setDeleteGroupOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteGroupMutation.mutate()}
+                  disabled={deleteGroupMutation.isPending}
+                >
+                  {deleteGroupMutation.isPending ? 'Deleting...' : 'Delete Group'}
+                </Button>
+              </div>
+              {deleteGroupMutation.isError && (
+                <p className="text-sm text-destructive">{(deleteGroupMutation.error as Error).message}</p>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
@@ -186,59 +276,133 @@ export default function GroupDetail() {
             {/* Balances Tab */}
             <TabsContent value="balances">
               <div className="grid gap-3">
-                {balances.length === 0 ? (
+                {userBreakdowns.length === 0 ? (
                   <Card className="border-0 shadow-md">
                     <CardContent className="p-8 text-center text-muted-foreground">
                       No balances yet. Add an expense to get started.
                     </CardContent>
                   </Card>
                 ) : (
-                  balances.map((b, i) => (
-                    <motion.div key={b.userId} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
-                              b.balance > 0 ? 'bg-success/10 text-success' : b.balance < 0 ? 'bg-destructive/10 text-destructive' : 'bg-secondary text-muted-foreground'
-                            }`}>
-                              {b.userName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="font-medium text-foreground">{b.userName}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {b.balance > 0 ? (
-                              <TrendingUp className="w-4 h-4 text-success" />
-                            ) : b.balance < 0 ? (
-                              <TrendingDown className="w-4 h-4 text-destructive" />
-                            ) : null}
-                            <span className={`font-display font-bold ${
-                              b.balance > 0 ? 'text-success' : b.balance < 0 ? 'text-destructive' : 'text-muted-foreground'
-                            }`}>
-                              {b.balance > 0 ? '+' : ''}{sym}{Math.abs(b.balance).toFixed(2)}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))
-                )}
+                  userBreakdowns.map((b: any, i: number) => {
+                    const isOwing = b.owes.length > 0;
+                    const isGettingBack = b.getsBack.length > 0;
+                    const totalOwes = b.owes.reduce((sum: number, o: any) => sum + o.amount, 0);
+                    const totalGetsBack = b.getsBack.reduce((sum: number, g: any) => sum + g.amount, 0);
+                    const isCurrentUser = b.userId === user?.id;
+                    const canSettle = isCurrentUser || isAdmin;
 
-                {simplified.length > 0 && (
-                  <div className="mt-4">
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Suggested Settlements</h3>
-                    {simplified.map((s, i) => (
-                      <Card key={i} className="border-0 shadow-sm mb-2">
-                        <CardContent className="p-4 flex items-center gap-3 text-sm">
-                          <span className="font-medium text-foreground">{s.fromName}</span>
-                          <ArrowRightLeft className="w-4 h-4 text-primary" />
-                          <span className="font-medium text-foreground">{s.toName}</span>
-                          <span className="ml-auto font-display font-bold text-primary">{sym}{s.amount.toFixed(2)}</span>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                    return (
+                      <motion.div key={b.userId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                        <Card className="border-0 shadow-sm overflow-hidden">
+                          {/* User header */}
+                          <div className="p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold',
+                                b.balance > 0 ? 'bg-success/10 text-success' : b.balance < 0 ? 'bg-destructive/10 text-destructive' : 'bg-secondary text-muted-foreground'
+                              )}>
+                                {b.userName.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <span className="font-semibold text-foreground">{b.userName}{isCurrentUser ? ' (You)' : ''}</span>
+                                <p className={cn('text-sm font-medium', b.balance > 0 ? 'text-success' : b.balance < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                                  {b.balance > 0 ? `gets back ${sym}${totalGetsBack.toFixed(2)}` : b.balance < 0 ? `owes ${sym}${totalOwes.toFixed(2)}` : 'settled up'}
+                                </p>
+                              </div>
+                            </div>
+                            {canSettle && (b.owes.length > 0 || b.getsBack.length > 0) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs"
+                                onClick={() => {
+                                  // Prefill with the first owe/get-back entry for this user
+                                  if (b.owes.length > 0) {
+                                    setSettlePrefill({ from: b.userId, to: b.owes[0].userId, amount: totalOwes.toFixed(2) });
+                                  } else {
+                                    setSettlePrefill({ from: b.getsBack[0].userId, to: b.userId, amount: totalGetsBack.toFixed(2) });
+                                  }
+                                  setSettleOpen(true);
+                                }}
+                              >
+                                <ArrowRightLeft className="w-3.5 h-3.5 mr-1" /> Settle
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* Breakdown rows */}
+                          <div className="border-t border-border/50 bg-muted/30">
+                            {b.owes.map((o: any, j: number) => (
+                              <div key={`owe-${j}`} className="px-4 py-2.5 flex items-center justify-between text-sm border-b border-border/30 last:border-0">
+                                <div className="flex items-center gap-2 pl-4">
+                                  <TrendingDown className="w-3.5 h-3.5 text-destructive" />
+                                  <span className="text-muted-foreground">owes</span>
+                                  <span className="font-medium text-foreground">{o.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-display font-semibold text-destructive">{sym}{o.amount.toFixed(2)}</span>
+                                  {canSettle && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      onClick={() => {
+                                        setSettlePrefill({ from: b.userId, to: o.userId, amount: o.amount.toFixed(2) });
+                                        setSettleOpen(true);
+                                      }}
+                                    >
+                                      <ArrowRightLeft className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {b.getsBack.map((g: any, j: number) => (
+                              <div key={`get-${j}`} className="px-4 py-2.5 flex items-center justify-between text-sm border-b border-border/30 last:border-0">
+                                <div className="flex items-center gap-2 pl-4">
+                                  <TrendingUp className="w-3.5 h-3.5 text-success" />
+                                  <span className="text-muted-foreground">gets back from</span>
+                                  <span className="font-medium text-foreground">{g.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-display font-semibold text-success">{sym}{g.amount.toFixed(2)}</span>
+                                  {canSettle && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      onClick={() => {
+                                        setSettlePrefill({ from: g.userId, to: b.userId, amount: g.amount.toFixed(2) });
+                                        setSettleOpen(true);
+                                      }}
+                                    >
+                                      <ArrowRightLeft className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </Card>
+                      </motion.div>
+                    );
+                  })
                 )}
               </div>
+
+              {/* Controlled SettleUpDialog triggered from balance rows */}
+              <SettleUpDialog
+                groupId={groupId!}
+                simplified={simplified}
+                sym={sym}
+                userId={user?.id || ''}
+                members={group.members || []}
+                open={settleOpen}
+                onOpenChange={setSettleOpen}
+                prefillFrom={settlePrefill.from}
+                prefillTo={settlePrefill.to}
+                prefillAmount={settlePrefill.amount}
+              />
             </TabsContent>
 
             {/* Expenses Tab */}
@@ -298,9 +462,10 @@ export default function GroupDetail() {
           <div className="space-y-6">
             {expenses.length === 0 ? (
               <Card className="border-0 shadow-md">
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  <Receipt className="w-10 h-10 mx-auto mb-2 text-muted-foreground/40" />
-                  No expenses yet to analyze
+                <CardContent className="p-12 text-center">
+                  <Receipt className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                  <p className="font-semibold text-foreground mb-1">No insights yet</p>
+                  <p className="text-sm text-muted-foreground">Add your first expense to see spending breakdowns and trends here.</p>
                 </CardContent>
               </Card>
             ) : (
@@ -584,7 +749,7 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="overflow-hidden min-h-[280px]">
+          <div className="overflow-hidden min-h-[280px] -mx-1 px-1">
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
                 key={step}
@@ -869,19 +1034,43 @@ function SettleUpDialog({
   sym,
   userId,
   members,
+  open: controlledOpen,
+  onOpenChange,
+  prefillFrom,
+  prefillTo,
+  prefillAmount,
 }: {
   groupId: string;
   simplified: any[];
   sym: string;
   userId: string;
   members: any[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  prefillFrom?: string;
+  prefillTo?: string;
+  prefillAmount?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? (onOpenChange || (() => {})) : setInternalOpen;
+
   const [fromUserId, setFromUserId] = useState('');
   const [toUserId, setToUserId] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const queryClient = useQueryClient();
+
+  // Sync prefill values when dialog opens
+  useEffect(() => {
+    if (open) {
+      setFromUserId(prefillFrom || '');
+      setToUserId(prefillTo || '');
+      setAmount(prefillAmount || '');
+      setNote('');
+    }
+  }, [open, prefillFrom, prefillTo, prefillAmount]);
 
   const mutation = useMutation({
     mutationFn: (data: RecordSettlementRequest) => api.recordSettlement(data),
@@ -906,11 +1095,13 @@ function SettleUpDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <ArrowRightLeft className="w-4 h-4 mr-1" /> Settle Up
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline">
+            <ArrowRightLeft className="w-4 h-4 mr-1" /> Settle Up
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="font-display">Record Settlement</DialogTitle>
@@ -935,50 +1126,55 @@ function SettleUpDialog({
           </div>
         )}
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            mutation.mutate({ groupId, fromUserId, toUserId, amount: parseFloat(amount), note: note || undefined });
-          }}
-          className="space-y-4"
-        >
-          <div className="space-y-2">
-            <Label>From (who paid)</Label>
-            <Select value={fromUserId} onValueChange={setFromUserId}>
-              <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
-              <SelectContent>
-                {members.map((m) => (
-                  <SelectItem key={m.userId} value={m.userId}>{m.user.name}{m.isGuest ? ' (Guest)' : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>To (who received)</Label>
-            <Select value={toUserId} onValueChange={setToUserId}>
-              <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
-              <SelectContent>
-                {members.map((m) => (
-                  <SelectItem key={m.userId} value={m.userId}>{m.user.name}{m.isGuest ? ' (Guest)' : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Amount ({sym})</Label>
-            <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-          </div>
-          <div className="space-y-2">
-            <Label>Note (optional)</Label>
-            <Input placeholder="Cash payment" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-          <Button type="submit" className="w-full gradient-primary text-primary-foreground" disabled={mutation.isPending || !fromUserId || !toUserId}>
-            {mutation.isPending ? 'Recording...' : 'Record Settlement'}
-          </Button>
-          {mutation.isError && (
-            <p className="text-sm text-destructive">{(mutation.error as Error).message}</p>
-          )}
-        </form>
+        <fieldset disabled={mutation.isPending} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              mutation.mutate({ groupId, fromUserId, toUserId, amount: parseFloat(amount), note: note || undefined });
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label>From (who paid)</Label>
+              <Select value={fromUserId} onValueChange={setFromUserId}>
+                <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                <SelectContent>
+                  {members.map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>{m.user.name}{m.isGuest ? ' (Guest)' : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>To (who received)</Label>
+              <Select value={toUserId} onValueChange={setToUserId}>
+                <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                <SelectContent>
+                  {members.map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>{m.user.name}{m.isGuest ? ' (Guest)' : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {fromUserId && toUserId && fromUserId === toUserId && (
+              <p className="text-sm text-destructive">From and To must be different members.</p>
+            )}
+            <div className="space-y-2">
+              <Label>Amount ({sym})</Label>
+              <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Note (optional)</Label>
+              <Input placeholder="Cash payment" value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+            <Button type="submit" className="w-full gradient-primary text-primary-foreground" disabled={mutation.isPending || !fromUserId || !toUserId || fromUserId === toUserId || !amount}>
+              {mutation.isPending ? 'Recording...' : 'Record Settlement'}
+            </Button>
+            {mutation.isError && (
+              <p className="text-sm text-destructive">{(mutation.error as Error).message}</p>
+            )}
+          </form>
+        </fieldset>
       </DialogContent>
     </Dialog>
   );
@@ -1213,7 +1409,7 @@ function ExpenseCard({ expense: exp, sym, groupId, userId }: { expense: any; sym
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                    className="h-8 w-8 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Trash2 className="w-4 h-4 text-destructive" />
@@ -1251,14 +1447,7 @@ function ExpenseCard({ expense: exp, sym, groupId, userId }: { expense: any; sym
       <Dialog open={detailOpen} onOpenChange={(open) => { setDetailOpen(open); if (!open) setEditing(false); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="font-display">{editing ? 'Edit Expense' : 'Expense Details'}</DialogTitle>
-              {!editing && expenseDetail && (
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={startEditing}>
-                  <Pencil className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+            <DialogTitle className="font-display">{editing ? 'Edit Expense' : 'Expense Details'}</DialogTitle>
           </DialogHeader>
 
           {/* Edit Mode */}
@@ -1317,7 +1506,12 @@ function ExpenseCard({ expense: exp, sym, groupId, userId }: { expense: any; sym
             /* View Mode */
             <div className="space-y-4 mt-2">
               <div>
-                <h3 className="font-semibold text-lg text-foreground">{expenseDetail.title}</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg text-foreground">{expenseDetail.title}</h3>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={startEditing}>
+                    <Pencil className="w-3.5 h-3.5" /> Edit
+                  </Button>
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="font-display font-bold text-2xl text-primary">
                     {sym}{expenseDetail.amount.toFixed(2)}
@@ -1376,6 +1570,17 @@ function ExpenseCard({ expense: exp, sym, groupId, userId }: { expense: any; sym
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="pt-2 border-t border-border">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full justify-center gap-1.5"
+                  onClick={() => { setDetailOpen(false); setDeleteOpen(true); }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Expense
+                </Button>
               </div>
             </div>
           ) : (
