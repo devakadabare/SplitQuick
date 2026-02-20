@@ -17,7 +17,8 @@
       "Bash(npx vite build)",
       "Bash(npx prisma generate:*)",
       "Bash(del /f \"e:\\\\My Project\\\\Bmad Testing\\\\expense-app-backend\\\\node_modules\\\\.prisma\\\\client\\\\query_engine-windows.dll.node\")",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(xargs:*)"
     ]
   }
 }
