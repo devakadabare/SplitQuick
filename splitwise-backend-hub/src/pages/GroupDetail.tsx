@@ -280,12 +280,12 @@ export default function GroupDetail() {
         </Card>
 
         {/* Activity / Insights Toggle */}
-        <div className="flex gap-1 mb-4 bg-secondary rounded-lg p-1 w-fit">
+        <div className="flex gap-1 mb-4 bg-secondary rounded-lg p-1">
           <button
             type="button"
             onClick={() => setView('activity')}
             className={cn(
-              'px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
+              'flex-1 px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
               view === 'activity' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -295,7 +295,7 @@ export default function GroupDetail() {
             type="button"
             onClick={() => setView('insights')}
             className={cn(
-              'px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
+              'flex-1 px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
               view === 'insights' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -306,11 +306,11 @@ export default function GroupDetail() {
         {/* Activity Panel */}
         {view === 'activity' && (
           <Tabs defaultValue="balances" className="space-y-4">
-            <TabsList className="bg-secondary">
-              <TabsTrigger value="balances">Balances</TabsTrigger>
-              <TabsTrigger value="expenses">Expenses</TabsTrigger>
-              <TabsTrigger value="settlements">Settlements</TabsTrigger>
-              <TabsTrigger value="members">Members</TabsTrigger>
+            <TabsList className="bg-secondary w-full">
+              <TabsTrigger value="balances" className="flex-1">Balances</TabsTrigger>
+              <TabsTrigger value="expenses" className="flex-1">Expenses</TabsTrigger>
+              <TabsTrigger value="settlements" className="flex-1">Settlements</TabsTrigger>
+              <TabsTrigger value="members" className="flex-1">Members</TabsTrigger>
             </TabsList>
 
             {/* Balances Tab */}
@@ -614,6 +614,8 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const currentUserId = members.find((m) => m.userId === user?.id)?.userId || '';
 
   // Step tracking
   const [step, setStep] = useState(1);
@@ -631,7 +633,7 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
   const [customSplits, setCustomSplits] = useState<Record<string, string>>({});
 
   // Step 3: Additional Info
-  const [paidBy, setPaidBy] = useState('');
+  const [paidBy, setPaidBy] = useState(currentUserId);
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
 
@@ -647,7 +649,7 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
       setSelectedMembers(new Set());
       setPercentageSplits({});
       setCustomSplits({});
-      setPaidBy('');
+      setPaidBy(currentUserId);
       setCategory('');
       setNote('');
     }
@@ -691,8 +693,7 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     const amt = parseFloat(amount);
     let splits: { userId: string; amount: number; percentage?: number }[] = [];
     let apiSplitMethod: 'equal' | 'percentage' | 'custom';
@@ -788,7 +789,7 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
           ))}
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => e.preventDefault()}>
           <div className="overflow-hidden min-h-[280px] -mx-1 px-1">
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
@@ -1004,7 +1005,7 @@ function AddExpenseDialog({ groupId, members, sym, open: controlledOpen, onOpenC
                 Next <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button type="submit" size="sm" className="gradient-primary text-primary-foreground" disabled={mutation.isPending || !paidBy}>
+              <Button type="button" size="sm" className="gradient-primary text-primary-foreground" disabled={mutation.isPending || !paidBy} onClick={handleSubmit}>
                 {mutation.isPending ? 'Adding...' : 'Add Expense'}
               </Button>
             )}
